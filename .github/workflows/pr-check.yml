@@ -3,7 +3,7 @@ name: PR check
 on:
   push:
     branches:
-      - main
+      - prcheck
     paths-ignore:
       - "**/README.md"
       - ".github/workflows/*"
