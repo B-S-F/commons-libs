@@ -1,0 +1,97 @@
+name: PR check
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - "**/README.md"
+      - ".github/workflows/*"
+      - "!.github/workflows/pr-check.yml"
+  pull_request:
+    branches:
+      - main
+    paths-ignore:
+      - "**/README.md"
+      - ".github/workflows/*"
+      - "!.github/workflows/pr-check.yml"
+
+env:
+  MAX_COVERAGE: 80
+  MIN_COVERAGE: 50
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      packages: read
+    env:
+      NPM_REGISTRY_URL: https://npm.pkg.github.com
+      NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+          fetch-depth: 100
+
+      - name: Cache turbo build setup
+        uses: actions/cache@v3
+        with:
+          path: .turbo
+          key: ${{ runner.os }}-turbo-pr-check-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-turbo-pr-check-
+
+      - name: Build
+        run: |
+          npm ci -ws --include-workspace-root
+          npm run build
+
+      - name: Yaku API Commons Lib Unit Tests
+        run: npm run test:cov
+
+      - name: Private actions checkout
+        uses: daspn/private-actions-checkout@v2
+        with:
+          actions_list: '["B-S-F/github-actions@main"]'
+          checkout_base_path: ./.github/actions
+          app_id: 1007791
+          app_private_key: ${{ secrets.ACCESS_ACTIONS_REPO_APP_PRIVATEKEY }}
+
+      - name: Create Code Coverage Summary
+        id: coverage-summary
+        uses: ./.github/actions/github-actions/json-code-coverage-summary
+        if: github.actor != 'depbot'
+        with:
+          filenames: ./libs/**/coverage-summary.json
+          threshold: ${{ env.MIN_COVERAGE }},${{ env.MAX_COVERAGE }}
+          kind: node
+          show-details: true
+
+      - name: Add Coverage as PR Comment
+        if: github.event_name == 'pull_request' && github.actor != 'depbot'
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          path: code-coverage-results.md
+
+      - name: Upload Coverage Badge data
+        if: github.event_name == 'push' && github.actor != 'depbot'
+        run: |
+          percentage=${{ steps.coverage-summary.outputs.total-coverage }}
+          if [ $percentage -ge "${{ env.MAX_COVERAGE }}" ]; then
+            color="green"
+          elif [ $percentage -ge "${{ env.MIN_COVERAGE }}" ]; then
+            color="yellow"
+          else
+            color="red"
+          fi
+          jq -n --arg color "$color" --arg percentage "$percentage%" '{"schemaVersion": 1, "label": "Coverage", "message": $percentage, "color": $color}' > api-commons-lib.json
+          gh gist edit ${{ env.COVERAGE_BADGE_GIST_ID }} -a api-commons-lib.json
+        env:
+          COVERAGE_BADGE_GIST_ID: 819f17e6f8166534e73c8acf9ee58726
+          GITHUB_TOKEN: ${{ secrets.COVERAGE_BADGE_GIST_TOKEN }}
