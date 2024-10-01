@@ -3,7 +3,7 @@ name: PR check
 on:
   push:
     branches:
-      - prcheck
+      - main
     paths-ignore:
       - "**/README.md"
       - ".github/workflows/*"
@@ -46,14 +46,6 @@ jobs:
           key: ${{ runner.os }}-turbo-pr-check-${{ github.sha }}
           restore-keys: |
             ${{ runner.os }}-turbo-pr-check-
-
-    #  - uses: actions/setup-node@v3
-    #    with:
-    #      node-version: 18
-    #      check-latest: true
-    #      registry-url: ${{ env.NPM_REGISTRY_URL }}
-    #      scope: "@B-S-F"
-    #      cache: "npm"
 
       - name: Build
         run: |
