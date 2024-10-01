@@ -22,7 +22,7 @@ env:
 
 jobs:
   build-and-test:
-    runs-on: general-runners-static-ip
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       pull-requests: write
